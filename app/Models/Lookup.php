@@ -13,18 +13,25 @@ use Illuminate\Database\Eloquent\Model;
  * إنجليزي ثابت (لا يتغير بالتعريب) + `name_ar` للمعرض.
  *
  * المجموعات (group_key):
- *   customer_services, engineer_majors, engineer_specializations,
- *   office_services, exhibition_categories, exhibition_services,
- *   governorates (27), ...
+ *   governorates (27), exhibition_categories (23),
+ *   exhibition_sub_categories (96 — بـ parent_code للفئة الأم),
+ *   engineering_services (16 — موحّدة: تخصصات المهندس + خدمات العميل،
+ *   القرار 13: إملاء واحد server-side بدل إملاءين مختلفين),
+ *   office_services (8), exhibition_services (14 — قائمة موحّدة 0.5),
+ *   engineer_majors (2).
  *
  * UNIQUE(group_key, code) + weight للترتيب + active للإخفاء المؤقت.
+ * icon/color من §3.17 لعرض الكتالوج (Iconify id + hex).
+ * القيمة المخزنة في جداول البيانات (governorate, service, category)
+ * = name_ar للتوافق مع البيانات القديمة؛ الـ code للمطابقة الدقيقة.
  */
 class Lookup extends Model
 {
     protected $table = 'lookups';
 
     protected $fillable = [
-        'id', 'group_key', 'code', 'name_ar', 'weight', 'active',
+        'id', 'group_key', 'code', 'name_ar', 'icon', 'color', 'parent_code',
+        'weight', 'active',
     ];
 
     protected function casts(): array
