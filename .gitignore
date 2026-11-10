@@ -22,3 +22,7 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# SQLite stray database (القاعدة المعتمدة هي MySQL — انظر .env)
+/t3meer
+/database/*.sqlite
