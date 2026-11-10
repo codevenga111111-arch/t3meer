@@ -62,6 +62,9 @@ class ImportSupabaseData extends Command
     /** @var array<string, true> معرّفات المستخدمين للتحقق من الـ FK */
     private array $userIds = [];
 
+    /** @var array<string, string> user_id → user_type (لتفكيك rating.type المزدوجة). */
+    private array $userTypes = [];
+
     /** @var array<string, true> تتبع المفاتيح المكررة ( UNIQUE ) */
     private array $seen = [];
 
@@ -92,6 +95,8 @@ class ImportSupabaseData extends Command
         }
 
         $this->userIds = DB::table('users')->pluck('id')->flip()->all();
+        // نوع كل مستخدم — يُستخدم في rating.writer_type (فصل الدلالة المزدوجة).
+        $this->userTypes = DB::table('users')->pluck('user_type', 'id')->all();
 
         foreach (self::ORDER as $table) {
             $file = $dir.DIRECTORY_SEPARATOR.$table.'_rows.sql';
@@ -161,6 +166,7 @@ class ImportSupabaseData extends Command
 
         if ($table === 'users' && ! $this->dry) {
             $this->userIds = DB::table('users')->pluck('id')->flip()->all();
+            $this->userTypes = DB::table('users')->pluck('user_type', 'id')->all();
         }
     }
 
@@ -973,13 +979,25 @@ class ImportSupabaseData extends Command
 
         $this->seen['rating'][$key] = true;
         $type = $this->mapUserType($r['type'] ?? null, null);
-        $allowed = ['customer', 'engineer', 'office', 'exhibition'];
+        $allowed = ['customer', 'engineer', 'office', 'exhibition', 'admin'];
         $created = $this->ts($r['created_at'] ?? null);
+
+        // rating.type القديمة ذات دلالة مزدوجة (SPEC 1.2.16) — فُصلت إلى:
+        //   target_type: نوع الهدف (platform لتقييمات slug=t3meer).
+        //   writer_type: نوع الكاتب (من users.user_type، أو القيمة القديمة
+        //                لتقييمات المنصة حيث type = نوع الكاتب).
+        $isPlatform = $slug === 't3meer';
+        $writerType = $isPlatform && in_array($type, $allowed, true)
+            ? $type
+            : ($userId !== null ? ($this->userTypes[$userId] ?? null) : null);
 
         return [
             'id' => (int) $r['id'],
             'slug' => $slug,
-            'type' => in_array($type, $allowed, true) ? $type : null, // دلالة مزدوجة — نُبقيها nullable
+            'target_type' => $isPlatform
+                ? 'platform'
+                : (in_array($type, ['engineer', 'office', 'exhibition'], true) ? $type : null),
+            'writer_type' => $writerType,
             'user_id' => $userId,
             'name' => $this->str($r['name'] ?? null, ''),
             'rating' => $rating,

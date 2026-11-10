@@ -163,6 +163,48 @@ class User extends Authenticatable
         return $this->hasOne(Subscription::class, 'user_id');
     }
 
+    /** خدمات/تخصصات المالك (SPEC 1.2.6) — عدة صفوف. */
+    public function services(): HasMany
+    {
+        return $this->hasMany(Service::class, 'user_id');
+    }
+
+    /** معرض الأعمال (SPEC 1.2.7). */
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'user_id');
+    }
+
+    /** المنتجات (SPEC 1.2.8) — للمعرض فقط. */
+    public function products(): HasMany
+    {
+        return $this->hasMany(Product::class, 'user_id');
+    }
+
+    /** المفضلة (SPEC 1.2.15). */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(Favorite::class, 'user_id');
+    }
+
+    /** التقييمات التي كتبها هذا المستخدم (SPEC 1.2.16). */
+    public function writtenRatings(): HasMany
+    {
+        return $this->hasMany(Rating::class, 'user_id');
+    }
+
+    /** حملات التسويق (SPEC 1.2.19). */
+    public function marketing(): HasOne
+    {
+        return $this->hasOne(Marketing::class, 'user_id');
+    }
+
+    /** بيانات التوثيق (SPEC 1.2.9). */
+    public function validation(): HasOne
+    {
+        return $this->hasOne(UserValidation::class, 'user_id');
+    }
+
     /** هل وصل المستخدم لأقصى خطوة في Onboarding (قرار #12 = المسار الحالي 2.A). */
     public function hasCompletedOnboarding(): bool
     {
