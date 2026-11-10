@@ -22,7 +22,10 @@ class EnsureUserRole
             return response()->json(['message' => 'يجب تسجيل الدخول'], 401);
         }
 
-        $userType = (string) $user->getAttribute('user_type');
+        // user_type مُلموس كـ AccountType (casts) — نقرأ قيمته النصية.
+        $userType = method_exists($user, 'userTypeValue')
+            ? $user->userTypeValue()
+            : (string) $user->getAttribute('user_type');
 
         // دور الأدمن مسجّل أيضاً في جدول user_roles (بيانات البروداكشن).
         $rolesFromTable = $user->roles()->pluck('role')->all();

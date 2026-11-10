@@ -24,7 +24,9 @@ class EnsureOnboardingStep
         }
 
         $currentStep = (int) $user->getAttribute('current_step');
-        $userType = (string) $user->getAttribute('user_type');
+        $userType = method_exists($user, 'userTypeValue')
+            ? $user->userTypeValue()
+            : (string) $user->getAttribute('user_type');
 
         if ($currentStep < $minStep) {
             return response()->json([

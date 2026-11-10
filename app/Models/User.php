@@ -3,6 +3,9 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\AccountType;
+use App\Enums\PlanType;
+use App\Enums\Status;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -41,6 +44,7 @@ class User extends Authenticatable
         'selected_plan',
         'selected_billing_cycle',
         'selected_user_type',
+        'profile_image',
         'rejection_reason',
     ];
 
@@ -70,7 +74,32 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'current_step' => 'integer',
+
+            // قرارات التوحيد (SPEC 1.4) مفروضة على مستوى الكود:
+            // rejected بدل reject (قرار #4)، professional بدل pro (قرار #1).
+            'user_type' => AccountType::class,
+            'status' => Status::class,
+            'selected_plan' => PlanType::class,
         ];
+    }
+
+    /**
+     * نوع الحساب كـ enum — استخدمه بدل قراءة الحقل مباشرة.
+     * (الحقل المُلموس يرجع AccountType بسبب casts، والـ accessor بيحتمل الاتنين).
+     */
+    public function userType(): AccountType
+    {
+        $value = $this->getAttribute('user_type');
+
+        return $value instanceof AccountType ? $value : AccountType::from((string) $value);
+    }
+
+    /**
+     * قيمة نوع الحساب نصاً — لـ role middleware وOnboarding::stepRoute().
+     */
+    public function userTypeValue(): string
+    {
+        return $this->userType()->value;
     }
 
     /**
@@ -98,7 +127,7 @@ class User extends Authenticatable
         $fromTable = $this->roles()->pluck('role')->all();
 
         return array_values(array_unique(array_filter(array_merge(
-            [(string) $this->getAttribute('user_type')],
+            [$this->userTypeValue()],
             $fromTable
         ))));
     }
