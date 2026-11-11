@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\Status;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -37,6 +39,21 @@ class Marketing extends Model
             'banner' => 'array',
             'social' => 'array',
         ];
+    }
+
+    /**
+     * إعادة بناء `marketing_active_users` (SPEC 1.3 + 5.2.10 + مهمة ClickUp #8).
+     *
+     * حملات التسويق لحسابات النشطة فقط وبانر موجود (الفلاتر التانية —
+     * user_type وplan_type — بتضيفها العميل زي 5.2.10: مهندس = premium،
+     * والباقي = professional).
+     */
+    public function scopeMarketingActiveUsers(Builder $query): Builder
+    {
+        return $query->select('marketing.*')
+            ->join('users', 'users.id', '=', 'marketing.user_id')
+            ->where('users.status', Status::Active->value)
+            ->whereNotNull('marketing.banner');
     }
 
     public function user(): BelongsTo

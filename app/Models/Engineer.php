@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Traits\PublicViewScope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
@@ -12,6 +14,8 @@ use Illuminate\Support\Str;
  */
 class Engineer extends Model
 {
+    use PublicViewScope;
+
     protected $table = 'engineers';
 
     protected $fillable = [
@@ -43,6 +47,29 @@ class Engineer extends Model
                 $model->setAttribute('id', (string) Str::uuid());
             }
         });
+    }
+
+    /**
+     * إعادة بناء `public_engineers_view` (SPEC 1.3 + مهمة ClickUp #8).
+     *
+     * زي view المكاتب بالظبط + `user_name` = users.name (الكود القديم كان
+     * يقرأه في البحث وبقائمة الأدمن) وphone بأولوية الملف ثم المستخدم.
+     *
+     * الترتيب الافتراضي للدليل: ->orderByPlanWeight() (SPEC 1.8.12).
+     */
+    public function scopePublicEngineersView(Builder $query): Builder
+    {
+        $query->select('engineers.*');
+
+        $this->joinActiveUsers(
+            $query,
+            phone: 'COALESCE(engineers.phone, users.phone)',
+            withUserName: true
+        );
+        $this->withViewAggregates($query);
+        $this->withViewCollections($query, ['services', 'projects', 'permissions']);
+
+        return $query;
     }
 
     public function user(): BelongsTo
