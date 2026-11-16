@@ -47,4 +47,57 @@ class Stat extends Model
     {
         return $query->where('metric_type', MetricType::Visit->value);
     }
+
+    /**
+     * عدادات slug معين (بديل جزئي لـ RPC `get_limited_stats(p_slug)` — SPEC 1.4).
+     */
+    public function scopeForSlug($query, string $slug)
+    {
+        return $query->where('slug', $slug);
+    }
+
+    /** تصفية على نوع واحد من الـ metrics الثمانية. */
+    public function scopeMetric($query, MetricType|string $metric)
+    {
+        $value = $metric instanceof MetricType ? $metric->value : MetricType::normalizeAlias((string) $metric);
+
+        return $query->where('metric_type', $value);
+    }
+
+    /**
+     * فترة محددة بالتاريخ (inclusive) — أساس `get_limited_stats`.
+     *
+     * ⚠ `whereDate` وليس `whereBetween`: الـ cast بيخزّن القيمة بصيغة
+     * `Y-m-d H:i:s` في SQLite، ومقارنة النصوص هاستبعد صف اليوم الأخير
+     * (`'2026-11-16 00:00:00' > '2026-11-16'`) — وده كان بيرجّع مجموع ناقص.
+     */
+    public function scopePeriod($query, string $from, string $to)
+    {
+        return $query->whereDate('date', '>=', $from)
+            ->whereDate('date', '<=', $to);
+    }
+
+    /**
+     * الفترة المعتمدة لـ `get_limited_stats` = **الشهر التقويمي الحالي**
+     * (القرار المُحسم لـ SPEC 1.10.3: "تعريف الفترة غير معروف").
+     *
+     * المبرر: النص المعروض في الداشبورد "زيارات هذا الشهر" وبالأدمن
+     * `.visit` = "زيارات الشهر الحالي" (admin.api.ts:631) — فالتقاطع الأول هو
+     * الشهر، وإلا لكان الاسم limited بدل monthly.
+     */
+    public function scopeCurrentMonth($query)
+    {
+        // whereDate — نفس مبرر scopePeriod (آخر يوم في الشهر كان بيتسابت).
+        return $query->whereDate('date', '>=', now()->startOfMonth()->toDateString())
+            ->whereDate('date', '<=', now()->endOfMonth()->toDateString());
+    }
+
+    /**
+     * آخر N شهر (بما فيها الشهر الحالي) — أساس رسم `get_all_stats` 12 شهراً.
+     * الرسم بيجمع SUM(count) لكل شهر (قرار 7.1#8) وليس عدّ الصفوف.
+     */
+    public function scopeRecentMonths($query, int $months = 12)
+    {
+        return $query->where('date', '>=', now()->subMonthsNoOverflow($months - 1)->startOfMonth()->toDateString());
+    }
 }
