@@ -57,6 +57,12 @@ trait PublicViewScope
      * average_rating = avg(rating.rating) بنفس slug، reviews_count = عددها،
      * total_visits = sum(stats.count) حيث metric_type = 'visit'.
      *
+     * ⚠ المقارنة على بيانات البروداكشن الحقيقية (المهمة 10) أثبتت إن الـ view
+     * القديم كان بيحسب الزيارات = SUM(count) + COUNT(صفوف visit) — يعني كل صف
+     * بيزيد زيارة عن الـ count بتاعه. مستورد Supabase بيحفظ المعنى ده جوه
+     * `count` لصفوف visit (قرار #8: صف واحد لكل يوم)، فالـ scope هنا يجمع
+     * `count` عادي ويطابق الـ view (20/20 مكتب في ملف التصدير).
+     *
      * بدون تقييمات/زيارات ترجع 0 (الواجهة بتعتبرها صفر أصلاً).
      *
      * ⚠ الـ alias لازم يكون جوه DB::raw: مفاتيح addSelect بتتجاهل للـ Expressions.

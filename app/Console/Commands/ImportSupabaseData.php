@@ -21,6 +21,10 @@ use Illuminate\Support\Facades\DB;
  *   بتتخطى لأنها مش جداول — بتتبني كاستعلامات في Laravel.
  * - جدول plans بينشئ صفوف template في user_permissions (الحدود لكل باقة — قرار #6).
  * - stats بيتحطّط بنفس (slug, metric, date) بجمع count (قرار #8 grain يومي).
+ *   لأجل `visit` بنضيف 1 لكل صف مصدر قبل الجمع: الـ view القديم كان يحسب
+ *   الزيارات = SUM(count) + COUNT(*) لصفوف visit (اتأكدنا من 20/20 صف في
+ *   public_offices_view)، والـ grain اليومي بيجمع صفوف نفس اليوم في صف واحد —
+ *   لازم نحفظ عدد الصفوف دي جوه القيمة عشان total_visits يطابق البروداكشن.
  * - مفيش trigger/stored procedure — كل التحويلات في PHP.
  * - idempotent: أي صف مكرر بيتجاهل (INSERT IGNORE) — التشغيل التاني آمن.
  *
@@ -1034,10 +1038,15 @@ class ImportSupabaseData extends Command
         }
 
         // قرار #8: grain يومي — نجمع count لنفس (slug, metric, date).
+        // (`visit` بس): كل صف في البروداكçon كان يحسب زيارة مستقلة زيادة على
+        // count بتاعه — مقارنة الـ view القديم على 20 مكتب حقيقي أثبتت
+        // total_visits = SUM(count) + COUNT(صفوف visit)، فبنضيف الـ 1 ده هنا
+        // قبل التجميع عشان الـ scope يقرأ SUM(count) بس ويطابق الـ view.
+        $count = $this->statCount($r) + ($metric === 'visit' ? 1 : 0);
         $key = $slug.'|'.$metric.'|'.$date;
 
         if (isset($this->statsAgg[$key])) {
-            $this->statsAgg[$key]['count'] += $this->statCount($r);
+            $this->statsAgg[$key]['count'] += $count;
 
             return null; // اتجمّع — مش تخطي حقيقي
         }
@@ -1046,7 +1055,7 @@ class ImportSupabaseData extends Command
             'slug' => $slug,
             'metric_type' => $metric,
             'date' => $date,
-            'count' => $this->statCount($r),
+            'count' => $count,
             'user_id' => $this->userExists((string) ($r['user_id'] ?? '')) ? (string) $r['user_id'] : null,
             'type' => $this->mapUserType($r['type'] ?? null, null),
             'created_at' => $this->ts($r['created_at'] ?? null) ?? now()->toDateTimeString(),

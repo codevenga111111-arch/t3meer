@@ -7,6 +7,7 @@ use App\Enums\Status;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
@@ -54,16 +55,29 @@ class Project extends Model
      * مشاريع أصحاب الباقات المميزة والحسابات النشطة فقط، الأحدث أولاً
      * (الview الأصلي كان order by created_at desc).
      *
-     * ⚠ شرط "الباقات النشطة" مُستنتج (SPEC 5.2.5 — تعريف الـ view الأصلي
-     * مش موجود في الريبو): users.selected_plan = premium + users.status = active.
-     * بدون فحص subscriptions عشان ما نخسرش حسابات الباقة المدفوعة يدوياً.
+     * ⚠ شرط "الباقات النشطة" مُستنتج (SPEC 5.2.5 — تعريف الـ view الأصلي مش
+     * موجود في الريبو). التحقق على بيانات البروداكشن الحقيقية (المهمة 10)
+     * أثبت إن الـ view فيه 68 مشروع: 56 لأصحاب اشتراك premium نشط + 12
+     * لأصحاب اشتراك basic نشط، وكلهم status=active — ومفيش ولا مشروع لأصحاب
+     * الاشتراك الحر/المنتهي أو غير النشطين. يعني الشرط الحقيقي = اشتراك
+     * **مدفوع نشط** (≠ free)، مش `selected_plan = premium` (اللي كان بيقصي
+     * الـ 12 صف بتوع basic خطأً).
+     *
+     * بنستخدم EXISTS بدل join عشان ما نضاعفش صفوف المشاريع لو اتوجد أكتر من
+     * صف اشتراك (الـ view الأصلي كان بيرجع كل مشروع مرة واحدة).
      */
     public function scopePremiumActiveView(Builder $query): Builder
     {
         return $query->select('projects.*')
             ->join('users', 'users.id', '=', 'projects.user_id')
             ->where('users.status', Status::Active->value)
-            ->where('users.selected_plan', PlanType::Premium->value)
+            ->whereExists(function ($subscription): void {
+                $subscription->select(DB::raw(1))
+                    ->from('subscriptions')
+                    ->whereColumn('subscriptions.user_id', 'users.id')
+                    ->where('subscriptions.status', Status::Active->value)
+                    ->where('subscriptions.plan_type', '!=', PlanType::Free->value);
+            })
             ->orderByDesc('projects.created_at');
     }
 

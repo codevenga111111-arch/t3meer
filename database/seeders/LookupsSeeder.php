@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Lookup;
+use App\Support\ExhibitionServices;
 use Illuminate\Database\Seeder;
 
 /**
@@ -28,8 +29,8 @@ use Illuminate\Database\Seeder;
  */
 class LookupsSeeder extends Seeder
 {
-    /** أيقونة الكتالوج الموحدة لفئات/خدمات المعرض (SPEC 2.875). */
-    private const EXHIBITION_ICON = 'solar:double-alt-arrow-right-bold';
+    /** أيقونة الكتالوج الموحدة لفئات/خدمات المعرض (SPEC 2.875 + 1.2.6). */
+    private const EXHIBITION_ICON = ExhibitionServices::ICON;
 
     public function run(): void
     {
@@ -331,27 +332,12 @@ class LookupsSeeder extends Seeder
     // ------------------------------------------------------------------
     private function seedExhibitionServices(): void
     {
-        $services = [
-            ['delivery-shipping', 'توصيل وشحن'],
-            ['installation', 'تركيب'],
-            ['design-consulting', 'استشارات تصميم'],
-            ['custom-manufacturing', 'تصنيع حسب الطلب'],
-            ['product-warranty', 'ضمان على المنتجات'],
-            ['wholesale', 'بيع بالجملة'],
-            ['inspection-measurement', 'معاينة وقياسات'],
-            ['after-sales-service', 'خدمة ما بعد البيع'],
-            ['payment-plans', 'تسهيلات سداد'],
-            ['free-samples', 'عينات مجانية'],
-            ['technical-support', 'دعم فني'],
-            ['quality-certificates', 'شهادات جودة'],
-            ['return-policy', 'سياسة إرجاع'],
-            ['supply-contracts', 'عقود توريد'],
-        ];
-
+        // القائمة الموحدة الـ14 تأتي من المصدر الوحيد: App\Support\ExhibitionServices
+        // (نفس المصدر اللي بيستعمله t3meer:merge-materials وقت نقل البيانات).
         $rows = [];
-        foreach ($services as [$code, $name]) {
+        foreach (ExhibitionServices::ALL as $code => $name) {
             $rows[] = ['code' => $code, 'name_ar' => $name,
-                'icon' => self::EXHIBITION_ICON, 'color' => '#FC7753'];
+                'icon' => ExhibitionServices::ICON, 'color' => ExhibitionServices::COLOR];
         }
         $this->upsert('exhibition_services', $rows);
     }

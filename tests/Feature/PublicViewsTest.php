@@ -25,6 +25,7 @@ use App\Models\Project;
 use App\Models\Rating;
 use App\Models\Service;
 use App\Models\Stat;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Models\UserPermission;
 use Illuminate\Support\Facades\DB;
@@ -45,6 +46,21 @@ function viewUser(array $attributes = []): User
         'user_type' => 'office',
         'selected_plan' => PlanType::Free->value,
     ], $attributes));
+}
+
+/**
+ * اشتراك مدفوع نشط — شرط `premium_active_view` و`marketing_active_users`
+ * الحقيقي (اتأكدنا منه بمقارنة الـ scopes بالـ views على بيانات البروداكشن —
+ * المهمة 10): المشتركين بالخطة الحرة أو باشتراك منتهي مش بيدخلوا الـ view.
+ */
+function viewSubscription(User $user, string $plan = PlanType::Premium->value): Subscription
+{
+    return Subscription::create([
+        'user_id' => $user->id,
+        'user_type' => $user->user_type->value,
+        'plan_type' => $plan,
+        'status' => 'active',
+    ]);
 }
 
 function viewOffice(User $user, array $attributes = []): Office
@@ -338,24 +354,40 @@ it('does not build the dropped public materials view', function () {
 // premium_active_view + onePerUser (SPEC 1.7.6)
 // ---------------------------------------------------------------------------
 
-it('returns only premium active projects newest first', function () {
+it('returns projects of active paid subscriptions newest first', function () {
     $premium = viewUser(['selected_plan' => PlanType::Premium->value]);
     $basic = viewUser(['selected_plan' => PlanType::Basic->value]);
+    $free = viewUser(['selected_plan' => PlanType::Free->value]);
     $suspended = viewUser(['selected_plan' => PlanType::Premium->value, 'status' => Status::Suspended->value]);
+    $expired = viewUser(['selected_plan' => PlanType::Premium->value]);
+
+    viewSubscription($premium);
+    viewSubscription($basic, PlanType::Basic->value);
+    viewSubscription($free, PlanType::Free->value);
+    viewSubscription($suspended);
+    Subscription::create([
+        'user_id' => $expired->id, 'user_type' => 'office',
+        'plan_type' => PlanType::Premium->value, 'status' => 'expired',
+    ]);
 
     viewProject($premium, ['name' => 'الأقدم'], 120);
     viewProject($premium, ['name' => 'الأحدث'], 10);
     viewProject($basic, ['name' => 'مشروع باقة أساسية'], 5);
-    viewProject($suspended, ['name' => 'مشروع موقوف'], 1);
+    viewProject($free, ['name' => 'مشروع الباقة الحرة'], 4);
+    viewProject($suspended, ['name' => 'مشروع موقوف'], 3);
+    viewProject($expired, ['name' => 'مشروع اشتراك منتهي'], 2);
 
     $names = Project::query()->premiumActiveView()->get()->pluck('name');
 
-    expect($names->all())->toBe(['الأحدث', 'الأقدم']);
+    expect($names->all())->toBe(['مشروع باقة أساسية', 'الأحدث', 'الأقدم']);
 });
 
 it('keeps the newest project per user inside the window', function () {
     $a = viewUser(['selected_plan' => PlanType::Premium->value]);
     $b = viewUser(['selected_plan' => PlanType::Premium->value]);
+
+    viewSubscription($a);
+    viewSubscription($b);
 
     viewProject($a, ['name' => 'a-old'], 60);
     viewProject($a, ['name' => 'a-mid'], 50);
@@ -379,6 +411,7 @@ it('caps the homepage feed at the take limit', function () {
     ]));
 
     $users->each(function (User $user, int $index) {
+        viewSubscription($user);
         viewProject($user, ['name' => "p{$index}"], 10 + $index);
     });
 
@@ -393,21 +426,25 @@ it('caps the homepage feed at the take limit', function () {
 // marketing_active_users (SPEC 1.3 + 5.2.10)
 // ---------------------------------------------------------------------------
 
-it('returns marketing banners for active accounts with a banner', function () {
+it('returns marketing rows for active accounts with a paid subscription', function () {
     $withBanner = viewUser(['user_type' => 'office']);
+    viewSubscription($withBanner);
     Marketing::create([
         'user_id' => $withBanner->id, 'slug' => $withBanner->slug, 'user_type' => 'office',
         'plan_type' => 'professional',
         'banner' => ['title' => 'عرض', 'description' => 'وصف', 'image' => 'https://cdn/x.jpg'],
     ]);
 
+    // الـ view القديم بيرجع صفوف بـ banner=null كمان (الفلتر على العميل).
     $withoutBanner = viewUser(['user_type' => 'office']);
+    viewSubscription($withoutBanner, PlanType::Basic->value);
     Marketing::create([
         'user_id' => $withoutBanner->id, 'slug' => $withoutBanner->slug, 'user_type' => 'office',
         'plan_type' => 'professional', 'banner' => null,
     ]);
 
     $inactive = viewUser(['user_type' => 'office', 'status' => Status::Suspended->value]);
+    viewSubscription($inactive);
     Marketing::create([
         'user_id' => $inactive->id, 'slug' => $inactive->slug, 'user_type' => 'office',
         'plan_type' => 'professional',
@@ -416,8 +453,8 @@ it('returns marketing banners for active accounts with a banner', function () {
 
     $rows = Marketing::query()->marketingActiveUsers()->get();
 
-    expect($rows)->toHaveCount(1)
-        ->and($rows->first()->user_id)->toBe($withBanner->id);
+    expect($rows)->toHaveCount(2)
+        ->and($rows->pluck('user_id')->all())->toContain($withBanner->id, $withoutBanner->id);
 });
 
 // ---------------------------------------------------------------------------
@@ -523,6 +560,8 @@ it('counts projects from the embedded array in the exhibition resource', functio
 
 it('serializes a premium project with its details', function () {
     $user = viewUser(['user_type' => 'engineer', 'selected_plan' => PlanType::Premium->value]);
+    viewSubscription($user);
+
     $project = viewProject($user, [
         'name' => 'فيلا ساحلية', 'location' => 'الساحل الشمالي', 'area' => 250.5,
         'type' => 'سكني', 'user_type' => 'engineer', 'user_name' => 'م. سارة',
@@ -544,6 +583,8 @@ it('serializes a premium project with its details', function () {
 
 it('serializes a marketing banner', function () {
     $user = viewUser(['user_type' => 'office', 'selected_plan' => PlanType::Premium->value]);
+    viewSubscription($user);
+
     Marketing::create([
         'user_id' => $user->id, 'slug' => $user->slug, 'user_type' => 'office',
         'plan_type' => 'premium',
