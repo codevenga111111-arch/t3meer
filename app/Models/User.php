@@ -6,6 +6,7 @@ namespace App\Models;
 use App\Enums\AccountType;
 use App\Enums\PlanType;
 use App\Enums\Status;
+use App\Notifications\PasswordResetLinkNotification;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -210,5 +211,16 @@ class User extends Authenticatable
     public function hasCompletedOnboarding(): bool
     {
         return (int) $this->getAttribute('current_step') >= 4;
+    }
+
+    /**
+     * إرسال رابط إعادة تعيين كلمة المرور (SPEC 2 — يوم 4).
+     *
+     * ⛔ بديل الافتراضي اللي بيبني الرابط من route `password.reset`
+     * (مش موجودة — الفرونت بيقرأ `?token=&email=` من `/reset-password`).
+     */
+    public function sendPasswordResetNotification(#[\SensitiveParameter] $token): void
+    {
+        $this->notify(new PasswordResetLinkNotification($token));
     }
 }
